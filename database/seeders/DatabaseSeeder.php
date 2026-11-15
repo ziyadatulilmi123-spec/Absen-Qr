@@ -2,18 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        $this->call([
-            SekolahSeeder::class,
-        ]);
+        $sqlPath = database_path('ziyadatulilmi.sql');
+        if (File::exists($sqlPath)) {
+            DB::unprepared(File::get($sqlPath));
+        }
     }
 }
