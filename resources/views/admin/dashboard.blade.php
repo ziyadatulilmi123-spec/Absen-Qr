@@ -8,6 +8,10 @@
 </head>
 <body class="bg-gray-100 min-h-screen font-sans text-gray-800">
 
+    @php
+        $daftarSiswa = $siswas ?? \App\Models\Siswa::orderBy('kelas')->orderBy('nama')->get();
+    @endphp
+
     <!-- Navbar Atas -->
     <nav class="bg-[#064e3b] text-white px-6 py-4 shadow-md flex flex-wrap justify-between items-center gap-3">
         <div class="flex items-center gap-3">
@@ -24,7 +28,7 @@
             <a href="{{ route('home') }}" class="bg-emerald-800 hover:bg-emerald-700 border border-emerald-600 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition">
                 🌐 Lihat Web
             </a>
-            <a href="{{ route('login') }}" class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition">
+            <a href="{{ route('logout') }}" class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition">
                 Logout
             </a>
         </div>
@@ -66,14 +70,32 @@
 
                     <form action="{{ route('admin.absensi.store') }}" method="POST" class="space-y-4">
                         @csrf
-                        <div>
-                            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Siswa & Kelas</label>
-                            <select name="siswa_id" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
-                                @php $daftarSiswa = $siswas ?? \App\Models\Siswa::orderBy('kelas')->orderBy('nama')->get(); @endphp
-                                @foreach($daftarSiswa as $s)
-                                    <option value="{{ $s->id }}">{{ $s->nama }} ({{ $s->kelas }})</option>
-                                @endforeach
-                            </select>
+
+                        <!-- 1. Dropdown Pilih Kelas -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label for="selectKelasAbsen" class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                    1. Pilih Kelas
+                                </label>
+                                <select id="selectKelasAbsen" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                    <option value="">-- Pilih Kelas --</option>
+                                    @foreach($daftarSiswa->pluck('kelas')->unique()->sort() as $kelas)
+                                        @if(!empty($kelas))
+                                            <option value="{{ $kelas }}">{{ $kelas }}</option>
+                                        @endif
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <!-- 2. Dropdown Pilih Nama Siswa (Otomatis sesuai kelas) -->
+                            <div>
+                                <label for="selectSiswaAbsen" class="block text-xs font-bold text-gray-500 uppercase mb-1">
+                                    2. Pilih Nama Siswa
+                                </label>
+                                <select id="selectSiswaAbsen" name="siswa_id" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                    <option value="">-- Pilih Kelas Dulu --</option>
+                                </select>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-2 gap-3">
@@ -83,7 +105,7 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Status Kehadiran</label>
-                                <select name="status" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <select name="status" required class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
                                     <option value="Hadir">Hadir</option>
                                     <option value="Izin">Izin</option>
                                     <option value="Sakit">Sakit</option>
@@ -92,7 +114,7 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-[#064e3b] hover:bg-emerald-800 text-white font-bold text-sm py-3 rounded-xl transition">
+                        <button type="submit" class="w-full bg-[#064e3b] hover:bg-emerald-800 text-white font-bold text-sm py-3 rounded-xl transition cursor-pointer">
                             Simpan Absensi
                         </button>
                     </form>
@@ -104,7 +126,7 @@
                     </a>
                     <form action="{{ route('admin.absensi.reset') }}" method="POST" onsubmit="return confirm('Yakin ingin menghapus seluruh data absensi?')">
                         @csrf
-                        <button type="submit" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-xs py-2.5 rounded-xl transition">
+                        <button type="submit" class="w-full bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-bold text-xs py-2.5 rounded-xl transition cursor-pointer">
                             🗑️ Reset Seluruh Data Absensi
                         </button>
                     </form>
@@ -122,7 +144,7 @@
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Filter Kelas</label>
-                                <select name="kelas" class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                                <select name="kelas" class="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600">
                                     <option value="">-- Semua Kelas --</option>
                                     <option value="SMP - Kelas 7">SMP - Kelas 7</option>
                                     <option value="SMP - Kelas 8">SMP - Kelas 8</option>
@@ -138,7 +160,7 @@
                             </div>
                         </div>
 
-                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl transition">
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl transition cursor-pointer">
                             ⬇️ Download Excel Nilai Berdasarkan Filter
                         </button>
                     </form>
@@ -147,7 +169,7 @@
                 <div class="mt-6 pt-4 border-t border-gray-100">
                     <form action="{{ route('admin.nilai.reset') }}" method="POST" onsubmit="return confirm('Yakin ingin mereset seluruh data nilai?')">
                         @csrf
-                        <button type="submit" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 rounded-xl transition">
+                        <button type="submit" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-3 rounded-xl transition cursor-pointer">
                             🔄 Reset Seluruh Data Nilai
                         </button>
                     </form>
@@ -169,7 +191,7 @@
                 @csrf
                 <div>
                     <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nama Siswa</label>
-                    <select name="siswa_id" required class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm">
+                    <select name="siswa_id" required class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm bg-white">
                         @foreach($daftarSiswa as $s)
                             <option value="{{ $s->id }}">{{ $s->nama }} ({{ $s->kelas }})</option>
                         @endforeach
@@ -184,7 +206,7 @@
                     <input type="number" name="nilai" min="0" max="100" placeholder="85" required class="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm">
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" class="w-full bg-[#064e3b] hover:bg-emerald-800 text-white font-bold text-sm py-2.5 rounded-xl transition">
+                    <button type="submit" class="w-full bg-[#064e3b] hover:bg-emerald-800 text-white font-bold text-sm py-2.5 rounded-xl transition cursor-pointer">
                         Simpan Nilai
                     </button>
                 </div>
@@ -192,6 +214,35 @@
         </div>
 
     </div>
+
+    <!-- Script Penyaring Nama Siswa Berdasarkan Kelas -->
+    <script>
+        const dataSiswa = @json($daftarSiswa);
+        const selectKelasAbsen = document.getElementById('selectKelasAbsen');
+        const selectSiswaAbsen = document.getElementById('selectSiswaAbsen');
+
+        selectKelasAbsen.addEventListener('change', function () {
+            const kelas = this.value;
+            selectSiswaAbsen.innerHTML = '';
+
+            if (!kelas) {
+                selectSiswaAbsen.innerHTML = '<option value="">-- Pilih Kelas Dulu --</option>';
+                return;
+            }
+
+            const filtered = dataSiswa
+                .filter(s => s.kelas === kelas)
+                .sort((a, b) => a.nama.localeCompare(b.nama));
+
+            selectSiswaAbsen.innerHTML = `<option value="">-- Pilih Nama (${filtered.length} siswa) --</option>`;
+            filtered.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.nama;
+                selectSiswaAbsen.appendChild(opt);
+            });
+        });
+    </script>
 
 </body>
 </html>
