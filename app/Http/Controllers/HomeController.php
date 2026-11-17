@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Siswa;
 use App\Models\Absensi;
 use App\Models\Nilai;
 use App\Models\Ppdb;
+use App\Models\Siswa;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class HomeController extends Controller
@@ -20,11 +20,11 @@ class HomeController extends Controller
     }
 
     /**
-     * Store Data Pendaftaran SPMB Online
+     * Store Data Pendaftaran SPMB / PPDB Online
      */
     public function storePpdb(Request $request)
     {
-        $validated = $request->validate([
+        $request->validate([
             'nama_lengkap' => 'required|string|max:255',
             'nisn'         => 'nullable|string',
             'jk'           => 'required|string',
@@ -76,7 +76,7 @@ class HomeController extends Controller
     }
 
     /**
-     * 3. Cek Nilai & E-Raport Publik (/nilai)
+     * 4. Cek Nilai & E-Raport Publik (/nilai)
      */
     public function nilai()
     {
@@ -89,13 +89,14 @@ class HomeController extends Controller
      */
     public function adminDashboard()
     {
-        $siswas = class_exists('App\Models\Siswa') ? Siswa::all() : DB::table('siswas')->get();
-        
-        $pendaftar = class_exists('App\Models\Ppdb') 
-            ? Ppdb::all() 
+        $siswas = class_exists('App\Models\Siswa')
+            ? Siswa::orderBy('kelas')->orderBy('nama')->get()
+            : DB::table('siswas')->orderBy('kelas')->orderBy('nama')->get();
+
+        $pendaftar = class_exists('App\Models\Ppdb')
+            ? Ppdb::all()
             : (DB::getSchemaBuilder()->hasTable('ppdbs') ? DB::table('ppdbs')->get() : collect([]));
 
-        // Kelompok kelas untuk filter export nilai
         $kelases = $siswas->pluck('kelas')->unique()->filter()->values();
 
         return view('admin.dashboard', compact('siswas', 'pendaftar', 'kelases'));
@@ -158,11 +159,10 @@ class HomeController extends Controller
     }
 
     /**
-     * 7. Simpan Nilai Admin (Mendukung Input Banyak Mapel Sekaligus Per Siswa)
+     * 8. Simpan Nilai Admin (Mendukung Input Banyak Mapel Sekaligus & Single Mapel)
      */
     public function storeNilai(Request $request)
     {
-        // Jika inputan berupa array perorangan (banyak mapel sekaligus)
         if ($request->has('nilai_mapel') && is_array($request->nilai_mapel)) {
             $request->validate([
                 'siswa_id'    => 'required',
@@ -183,7 +183,7 @@ class HomeController extends Controller
                                 'jenis_ujian'    => $jenisUjian,
                             ],
                             [
-                                'nilai'          => $nilai,
+                                'nilai' => $nilai,
                             ]
                         );
                     } else {
@@ -194,8 +194,8 @@ class HomeController extends Controller
                                 'jenis_ujian'    => $jenisUjian,
                             ],
                             [
-                                'nilai'          => $nilai,
-                                'updated_at'     => now(),
+                                'nilai'      => $nilai,
+                                'updated_at' => now(),
                             ]
                         );
                     }
@@ -205,7 +205,6 @@ class HomeController extends Controller
             return redirect()->back()->with('success', 'Seluruh nilai mata pelajaran siswa berhasil disimpan!');
         }
 
-        // Jalur cadangan untuk simpan single mapel
         $request->validate([
             'siswa_id'       => 'required',
             'mata_pelajaran' => 'required|string',
@@ -221,7 +220,7 @@ class HomeController extends Controller
                     'jenis_ujian'    => $request->jenis_ujian,
                 ],
                 [
-                    'nilai'          => $request->nilai,
+                    'nilai' => $request->nilai,
                 ]
             );
         } else {
@@ -232,8 +231,8 @@ class HomeController extends Controller
                     'jenis_ujian'    => $request->jenis_ujian,
                 ],
                 [
-                    'nilai'          => $request->nilai,
-                    'updated_at'     => now(),
+                    'nilai'      => $request->nilai,
+                    'updated_at' => now(),
                 ]
             );
         }
@@ -242,7 +241,7 @@ class HomeController extends Controller
     }
 
     /**
-     * Reset Absensi & Nilai
+     * 9. Reset Absensi & Nilai
      */
     public function resetAbsensi()
     {
@@ -251,6 +250,7 @@ class HomeController extends Controller
         } else {
             DB::table('absensis')->truncate();
         }
+
         return redirect()->back()->with('success', 'Seluruh data absensi berhasil di-reset!');
     }
 
@@ -261,50 +261,89 @@ class HomeController extends Controller
         } else {
             DB::table('nilais')->truncate();
         }
+
         return redirect()->back()->with('success', 'Seluruh data nilai berhasil di-reset!');
     }
 
     /**
-     * 8. Export Rekap Absensi ke Format Excel (.xls)
+     * 10. Export Rekap Absensi ke Format Excel (.xls) Lengkap dengan Tanggal Input
      */
     public function exportAbsensi()
     {
         $fileName = 'Rekap_Absensi_Semua_Kelas_' . date('Y-m-d') . '.xls';
 
-        $siswas = DB::table('siswas')->get();
+        $siswas = DB::table('siswas')
+            ->orderBy('kelas')
+            ->orderBy('nama')
+            ->get();
+
+        $detailAbsensis = DB::table('absensis')
+            ->leftJoin('siswas', 'absensis.siswa_id', '=', 'siswas.id')
+            ->select('absensis.tanggal', 'siswas.nama', 'siswas.kelas', 'absensis.status')
+            ->orderBy('absensis.tanggal', 'desc')
+            ->orderBy('siswas.kelas', 'asc')
+            ->orderBy('siswas.nama', 'asc')
+            ->get();
 
         $headers = [
-            "Content-Type"        => "application/vnd.ms-excel; charset=UTF-8",
-            "Content-Disposition" => "attachment; filename=\"$fileName\"",
-            "Pragma"              => "no-cache",
-            "Expires"             => "0"
+            'Content-Type'        => 'application/vnd.ms-excel; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+            'Pragma'              => 'no-cache',
+            'Expires'             => '0',
         ];
 
-        $callback = function() use ($siswas) {
+        $callback = function () use ($siswas, $detailAbsensis) {
             echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
             echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
             echo '<body>';
+
+            // TABEL 1: REKAP AKUMULASI + RIWAYAT TANGGAL INPUT PER SANTRI
+            echo '<h3>REKAPITULASI KEHADIRAN SANTRI</h3>';
             echo '<table border="1">';
-            echo '<tr style="background-color: #f2f2f2; font-weight: bold; text-align: center;">';
-            echo '<th>No</th><th>Nama Siswa</th><th>Kelas</th><th>Hadir</th><th>Izin</th><th>Sakit</th><th>Alpa</th><th>Total Pertemuan</th><th>% Kehadiran</th><th>Keterangan</th>';
+            echo '<tr style="background-color: #d9ead3; font-weight: bold; text-align: center;">';
+            echo '<th>No</th>';
+            echo '<th>Nama Siswa</th>';
+            echo '<th>Kelas</th>';
+            echo '<th>Hadir</th>';
+            echo '<th>Izin</th>';
+            echo '<th>Sakit</th>';
+            echo '<th>Alpa</th>';
+            echo '<th>Total Pertemuan</th>';
+            echo '<th>% Kehadiran</th>';
+            echo '<th>Keterangan</th>';
+            echo '<th>Riwayat Tanggal Input</th>';
             echo '</tr>';
 
             foreach ($siswas as $index => $siswa) {
-                $hadir = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Hadir')->count();
-                $izin  = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Izin')->count();
-                $sakit = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Sakit')->count();
-                $alpa  = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Alpa')->count();
+                $riwayat = DB::table('absensis')
+                    ->where('siswa_id', $siswa->id)
+                    ->orderBy('tanggal', 'asc')
+                    ->get();
 
-                $total = $hadir + $izin + $sakit + $alpa;
+                $hadir = $riwayat->where('status', 'Hadir')->count();
+                $izin  = $riwayat->where('status', 'Izin')->count();
+                $sakit = $riwayat->where('status', 'Sakit')->count();
+                $alpa  = $riwayat->where('status', 'Alpa')->count();
+
+                $total  = $hadir + $izin + $sakit + $alpa;
                 $persen = $total > 0 ? round(($hadir / $total) * 100) : 0;
-                
+
                 $keterangan = $persen < 75 ? 'Di Bawah Minimum (<75%)' : 'Memenuhi';
-                $bgColor = $persen < 75 ? '#fce4d6' : '#ffffff';
+                $bgColor    = $persen < 75 ? '#fce4d6' : '#ffffff';
+
+                $daftarTanggal = $riwayat->map(function ($item) {
+                    $tglFormat = date('d/m/Y', strtotime($item->tanggal));
+                    return "{$tglFormat} ({$item->status})";
+                })->implode(', ');
+
+                if (empty($daftarTanggal)) {
+                    $daftarTanggal = '-';
+                }
 
                 echo "<tr style='background-color: {$bgColor};'>";
-                echo "<td align='center'>" . ($index + 1) . "</td>";
-                echo "<td>" . htmlspecialchars($siswa->nama ?? '-') . "</td>";
-                echo "<td>" . htmlspecialchars($siswa->kelas ?? '-') . "</td>";
+                echo "<td align='center'>" . ($index + 1) . '</td>';
+                echo '<td>' . htmlspecialchars($siswa->nama ?? '-') . '</td>';
+                echo '<td>' . htmlspecialchars($siswa->kelas ?? '-') . '</td>';
                 echo "<td align='center'>{$hadir}</td>";
                 echo "<td align='center'>{$izin}</td>";
                 echo "<td align='center'>{$sakit}</td>";
@@ -312,7 +351,34 @@ class HomeController extends Controller
                 echo "<td align='center'>{$total}</td>";
                 echo "<td align='right'>{$persen}%</td>";
                 echo "<td><b>{$keterangan}</b></td>";
-                echo "</tr>";
+                echo '<td>' . htmlspecialchars($daftarTanggal) . '</td>';
+                echo '</tr>';
+            }
+
+            echo '</table>';
+            echo '<br><br>';
+
+            // TABEL 2: RINCIAN HARIAN SESUAI TANGGAL INPUT
+            echo '<h3>RINCIAN LOG ABSENSI PER TANGGAL</h3>';
+            echo '<table border="1">';
+            echo '<tr style="background-color: #cfe2f3; font-weight: bold; text-align: center;">';
+            echo '<th>No</th>';
+            echo '<th>Tanggal</th>';
+            echo '<th>Nama Siswa</th>';
+            echo '<th>Kelas</th>';
+            echo '<th>Status Kehadiran</th>';
+            echo '</tr>';
+
+            foreach ($detailAbsensis as $idx => $row) {
+                $tglFormatted = $row->tanggal ? date('d/m/Y', strtotime($row->tanggal)) : '-';
+
+                echo '<tr>';
+                echo '<td align="center">' . ($idx + 1) . '</td>';
+                echo '<td align="center">' . htmlspecialchars($tglFormatted) . '</td>';
+                echo '<td>' . htmlspecialchars($row->nama ?? '-') . '</td>';
+                echo '<td>' . htmlspecialchars($row->kelas ?? '-') . '</td>';
+                echo '<td align="center">' . htmlspecialchars($row->status ?? '-') . '</td>';
+                echo '</tr>';
             }
 
             echo '</table>';
@@ -323,7 +389,7 @@ class HomeController extends Controller
     }
 
     /**
-     * 8. Export Rekap Nilai ke Format Excel (.xls)
+     * 11. Export Rekap Nilai ke Format Excel (.xls)
      */
     public function exportNilai(Request $request)
     {
@@ -337,6 +403,10 @@ class HomeController extends Controller
             $query->where('siswas.kelas', $request->kelas);
         }
 
+        if ($request->filled('mapel')) {
+            $query->where('nilais.mata_pelajaran', 'LIKE', '%' . $request->mapel . '%');
+        }
+
         if ($request->filled('mata_pelajaran')) {
             $query->where('nilais.mata_pelajaran', 'LIKE', '%' . $request->mata_pelajaran . '%');
         }
@@ -344,13 +414,13 @@ class HomeController extends Controller
         $nilais = $query->get();
 
         $headers = [
-            "Content-Type"        => "application/vnd.ms-excel; charset=UTF-8",
-            "Content-Disposition" => "attachment; filename=\"$fileName\"",
-            "Pragma"              => "no-cache",
-            "Expires"             => "0"
+            'Content-Type'        => 'application/vnd.ms-excel; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+            'Pragma'              => 'no-cache',
+            'Expires'             => '0',
         ];
 
-        $callback = function() use ($nilais) {
+        $callback = function () use ($nilais) {
             echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
             echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
             echo '<body>';
