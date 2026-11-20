@@ -1,9 +1,10 @@
 <?php
 
-use App\Http\Controllers\AbsensiQrController;
+use App\Http\Controllers\AbsenQrController;
 use App\Http\Controllers\HomeController;
-use App\Http\Controllers\NilaiController;
 use App\Http\Controllers\RaportController;
+use App\Models\Absensi;
+use App\Models\Siswa;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,120 +13,170 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Halaman Publik & Beranda
+| HALAMAN PUBLIK
 |--------------------------------------------------------------------------
 */
-
-// 1. Halaman Utama / Beranda & PPDB
 Route::get('/', [HomeController::class, 'index'])->name('home');
-Route::post('/ppdb', [HomeController::class, 'storePpdb'])->name('ppdb.store');
-
-// 2. Detail Profil Yayasan
-Route::get('/profil/{slug}', [HomeController::class, 'detailProfil'])->name('profil.detail');
-
-// 3. Cek Absensi, Nilai & E-Raport Publik
+Route::post('/spmb/daftar', [HomeController::class, 'storePpdb'])->name('ppdb.store');
+Route::get('/profil/{slug?}', [HomeController::class, 'detailProfil'])->name('profil.detail');
 Route::get('/absensi', [HomeController::class, 'absensi'])->name('absensi');
 Route::get('/nilai', [HomeController::class, 'nilai'])->name('nilai');
-Route::get('/raport/{siswa_id}', [RaportController::class, 'show'])->name('raport.show');
 
 /*
 |--------------------------------------------------------------------------
-| Autentikasi Operator (Bebas Diakses Tanpa Terjebak Redirect)
+| AUTENTIKASI (LOGIN & REGISTER)
 |--------------------------------------------------------------------------
 */
-
-// Halaman & Proses Login
 Route::get('/login', function () {
     return view('login');
 })->name('login');
 
 Route::post('/login', function (Request $request) {
     $credentials = $request->validate([
-        'email' => 'required|email',
-        'password' => 'required',
+        'email'    => ['required', 'email'],
+        'password' => ['required'],
     ]);
 
-    if (Auth::attempt($credentials)) {
+    if (Auth::attempt($credentials, $request->boolean('remember'))) {
         $request->session()->regenerate();
-        return redirect()->route('admin.dashboard');
+        return redirect()->intended(route('admin.dashboard'));
     }
 
     return back()->withErrors([
-        'email' => 'Email atau password yang Anda masukkan salah.',
+        'email' => 'Email atau password tidak sesuai.',
     ])->onlyInput('email');
-})->name('login.post');
+});
 
-// Halaman & Proses Register Operator Khusus (Kode Rahasia)
 Route::get('/register', function () {
     return view('register');
 })->name('register');
 
 Route::post('/register', function (Request $request) {
     $request->validate([
-        'name' => 'required|string|max:255',
-        'email' => 'required|email|unique:users,email',
-        'password' => 'required|min:6|confirmed',
-        'kode_rahasia' => 'required',
-    ], [
-        'email.unique' => 'Email ini sudah terdaftar sebagai operator.',
-        'password.min' => 'Password minimal harus 6 karakter.',
-        'password.confirmed' => 'Konfirmasi password tidak cocok.',
+        'name'     => ['required', 'string', 'max:255'],
+        'email'    => ['required', 'string', 'email', 'max:255', 'unique:users'],
+        'password' => ['required', 'string', 'min:6', 'confirmed'],
     ]);
 
-    $kodeValid = env('KODE_DAFTAR_ADMIN', 'ZIYADATUL2026');
-
-    if ($request->kode_rahasia !== $kodeValid) {
-        return back()
-            ->withErrors(['kode_rahasia' => 'Kode Rahasia Pondok salah!'])
-            ->withInput($request->except(['password', 'password_confirmation', 'kode_rahasia']));
-    }
-
-    User::create([
-        'name' => $request->name,
-        'email' => $request->email,
+    $user = User::create([
+        'name'     => $request->name,
+        'email'    => $request->email,
         'password' => Hash::make($request->password),
     ]);
 
-    return redirect()->route('login')->with('success', 'Akun operator berhasil didaftarkan! Silakan login.');
-})->name('register.post');
+    Auth::login($user);
 
-// Logout (Mendukung tombol POST maupun link GET)
+    return redirect()->route('admin.dashboard');
+});
+
 Route::match(['get', 'post'], '/logout', function (Request $request) {
     Auth::logout();
     $request->session()->invalidate();
     $request->session()->regenerateToken();
+
     return redirect()->route('login');
 })->name('logout');
 
 /*
 |--------------------------------------------------------------------------
-| Area Admin & Operator (Wajib Login)
+| FITUR ABSENSI QR
 |--------------------------------------------------------------------------
 */
+Route::get('/absen/scan', [AbsenQrController::class, 'scan'])->name('absen.scan');
+Route::post('/absen/scan/proses', [AbsenQrController::class, 'prosesScan'])->name('absen.scan.proses');
+Route::get('/absen/kartu', [AbsenQrController::class, 'kartu'])->name('absen.kartu');
 
-Route::middleware('auth')->group(function () {
-    // 4. Dashboard Admin
-    Route::get('/admin/dashboard', [HomeController::class, 'adminDashboard'])->name('admin.dashboard');
+/*
+|--------------------------------------------------------------------------
+| PANEL ADMIN & REKAP ABSENSI / NILAI
+|--------------------------------------------------------------------------
+*/
+Route::get('/admin/dashboard', [HomeController::class, 'adminDashboard'])->name('admin.dashboard');
 
-    // 5. Fitur Absensi QR Code (Scan & Cetak Kartu Pelajar)
-    Route::get('/admin/absensi/scan', [AbsensiQrController::class, 'scan'])->name('absen.scan');
-    Route::post('/admin/absensi/scan', [AbsensiQrController::class, 'storeScan'])->name('absen.scan.store');
-    Route::get('/admin/absensi/kartu', [AbsensiQrController::class, 'kartu'])->name('absen.kartu');
+// SPMB / PPDB Admin
+Route::post('/admin/ppdb/{id}/status', [HomeController::class, 'updatePpdbStatus'])->name('admin.ppdb.status');
+Route::delete('/admin/ppdb/{id}', [HomeController::class, 'deletePpdb'])->name('admin.ppdb.delete');
 
-    // 6. Aksi SPMB / PPDB Admin
-    Route::post('/admin/ppdb/status/{id}', [HomeController::class, 'updatePpdbStatus'])->name('admin.ppdb.updateStatus');
-    Route::delete('/admin/ppdb/delete/{id}', [HomeController::class, 'deletePpdb'])->name('admin.ppdb.delete');
+// Input Absensi Manual (Dropdown Bertingkat) & Export/Reset
+Route::post('/admin/absensi/store', [HomeController::class, 'storeAbsensi'])->name('admin.absensi.store');
+Route::get('/admin/absensi/export', [HomeController::class, 'exportAbsensi'])->name('admin.absensi.export');
+Route::post('/admin/absensi/reset', [HomeController::class, 'resetAbsensi'])->name('admin.absensi.reset');
 
-    // 7. Input Presensi, Nilai Batch & Reset Admin
-    Route::post('/admin/absensi/store', [HomeController::class, 'storeAbsensi'])->name('admin.absensi.store');
-    Route::post('/admin/nilai/store', [HomeController::class, 'storeNilai'])->name('admin.nilai.store');
-    Route::post('/nilai/store', [NilaiController::class, 'store'])->name('nilai.store');
-    Route::post('/nilai/batch', [NilaiController::class, 'storeBatch'])->name('nilai.storeBatch');
-    Route::any('/admin/absensi/reset', [HomeController::class, 'resetAbsensi'])->name('admin.absensi.reset');
-    Route::any('/admin/nilai/reset', [HomeController::class, 'resetNilai'])->name('admin.nilai.reset');
+// Matriks Absensi Bulanan (Input Cepat 1 Bulan Sekaligus)
+Route::get('/admin/absensi/matriks', function (Request $request) {
+    $siswas = Siswa::orderBy('kelas')->orderBy('nama')->get();
+    $kelasDipilih = $request->get('kelas', '');
+    $bulanDipilih = $request->get('bulan', date('Y-m'));
 
-    // 8. Export Rekap Excel / XLS
-    Route::get('/admin/absensi/export', [HomeController::class, 'exportAbsensi'])->name('absensi.export');
-    Route::get('/admin/absensi/export-alias', [HomeController::class, 'exportAbsensi'])->name('admin.absensi.export');
-    Route::get('/admin/nilai/export', [HomeController::class, 'exportNilai'])->name('admin.nilai.export');
-});
+    $absensiBulanIni = [];
+    if ($kelasDipilih && $bulanDipilih) {
+        $siswaIds = $siswas->where('kelas', $kelasDipilih)->pluck('id');
+        $records = Absensi::whereIn('siswa_id', $siswaIds)
+            ->where('tanggal', 'like', $bulanDipilih . '%')
+            ->get();
+
+        foreach ($records as $rec) {
+            $absensiBulanIni[$rec->siswa_id][$rec->tanggal] = $rec->status;
+        }
+    }
+
+    return view('admin.absensi_matriks', compact('siswas', 'kelasDipilih', 'bulanDipilih', 'absensiBulanIni'));
+})->name('admin.absensi.matriks');
+
+Route::post('/admin/absensi/matriks/simpan', function (Request $request) {
+    $request->validate([
+        'kelas' => 'required|string',
+        'bulan' => 'required|string',
+        'data'  => 'nullable|array',
+    ]);
+
+    $kelas = $request->kelas;
+    $bulan = $request->bulan;
+    $dataInput = $request->input('data', []);
+
+    $siswaIds = Siswa::where('kelas', $kelas)->pluck('id');
+
+    Absensi::whereIn('siswa_id', $siswaIds)
+        ->where('tanggal', 'like', $bulan . '%')
+        ->delete();
+
+    $insertBatch = [];
+    $now = now();
+
+    foreach ($dataInput as $siswaId => $tanggalList) {
+        if (!in_array($siswaId, $siswaIds->toArray())) {
+            continue;
+        }
+
+        foreach ($tanggalList as $tanggal => $status) {
+            if (in_array($status, ['Hadir', 'Izin', 'Sakit', 'Alpa'])) {
+                $insertBatch[] = [
+                    'siswa_id'   => $siswaId,
+                    'tanggal'    => $tanggal,
+                    'status'     => $status,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+        }
+    }
+
+    if (!empty($insertBatch)) {
+        foreach (array_chunk($insertBatch, 500) as $chunk) {
+            Absensi::insert($chunk);
+        }
+    }
+
+    return redirect()->route('admin.absensi.matriks', ['kelas' => $kelas, 'bulan' => $bulan])
+        ->with('success', "Berhasil menyimpan rekap bulan {$bulan} untuk kelas {$kelas} (" . count($insertBatch) . " catatan kehadiran).");
+})->name('admin.absensi.matriks.simpan');
+
+// Nilai & Raport Admin
+Route::post('/admin/nilai/store', [HomeController::class, 'storeNilai'])->name('admin.nilai.store');
+Route::get('/admin/nilai/export', [HomeController::class, 'exportNilai'])->name('admin.nilai.export');
+Route::post('/admin/nilai/reset', [HomeController::class, 'resetNilai'])->name('admin.nilai.reset');
+
+if (class_exists(RaportController::class)) {
+    Route::get('/admin/raport/{siswa_id?}', [RaportController::class, 'index'])->name('admin.raport');
+    Route::get('/admin/raport/{siswa_id}/cetak', [RaportController::class, 'cetak'])->name('admin.raport.cetak');
+}

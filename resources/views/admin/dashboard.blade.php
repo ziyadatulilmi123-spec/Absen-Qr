@@ -51,27 +51,30 @@
         <!-- Baris 1: Input Kehadiran & Export Nilai -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <!-- Card Kiri: Input Kehadiran Santri + Fitur QR -->
+            <!-- Card Kiri: Input Kehadiran Santri + Fitur QR & Matriks -->
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-between">
                 <div>
                     <h2 class="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
                         📅 Input Kehadiran Santri
                     </h2>
 
-                    <!-- Tombol Cepat Fitur Absensi QR -->
-                    <div class="grid grid-cols-2 gap-3 mb-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                    <!-- Tombol Cepat Fitur Absensi QR & Matriks -->
+                    <div class="grid grid-cols-2 gap-2.5 mb-5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                         <a href="{{ route('absen.scan') }}" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold py-2.5 px-3 rounded-lg text-center shadow-sm transition">
                             📷 Buka Scanner QR
                         </a>
                         <a href="{{ route('absen.kartu') }}" class="bg-amber-500 hover:bg-amber-400 text-white text-xs font-bold py-2.5 px-3 rounded-lg text-center shadow-sm transition">
                             🪪 Lihat & Cetak Kartu QR
                         </a>
+                        <a href="{{ route('admin.absensi.matriks') }}" class="col-span-2 bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold py-2.5 px-3 rounded-lg text-center shadow-sm transition">
+                            📋 Input Rekap Absensi Cepat per Bulan (Matriks 4 Bulan)
+                        </a>
                     </div>
 
                     <form action="{{ route('admin.absensi.store') }}" method="POST" class="space-y-4">
                         @csrf
 
-                        <!-- 1. Dropdown Pilih Kelas -->
+                        <!-- 1. Dropdown Pilih Kelas & 2. Dropdown Pilih Nama Siswa -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div>
                                 <label for="selectKelasAbsen" class="block text-xs font-bold text-gray-500 uppercase mb-1">
@@ -87,7 +90,6 @@
                                 </select>
                             </div>
 
-                            <!-- 2. Dropdown Pilih Nama Siswa (Otomatis sesuai kelas) -->
                             <div>
                                 <label for="selectSiswaAbsen" class="block text-xs font-bold text-gray-500 uppercase mb-1">
                                     2. Pilih Nama Siswa
