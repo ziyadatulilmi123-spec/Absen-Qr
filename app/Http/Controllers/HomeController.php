@@ -266,7 +266,7 @@ class HomeController extends Controller
     }
 
     /**
-     * 10. Export Rekap Absensi ke Format Excel (.xls) Lengkap dengan Tanggal Input
+     * 10. Export Rekap Absensi ke Format Excel (.xls) — Format 10 Kolom Bersih
      */
     public function exportAbsensi()
     {
@@ -277,14 +277,6 @@ class HomeController extends Controller
             ->orderBy('nama')
             ->get();
 
-        $detailAbsensis = DB::table('absensis')
-            ->leftJoin('siswas', 'absensis.siswa_id', '=', 'siswas.id')
-            ->select('absensis.tanggal', 'siswas.nama', 'siswas.kelas', 'absensis.status')
-            ->orderBy('absensis.tanggal', 'desc')
-            ->orderBy('siswas.kelas', 'asc')
-            ->orderBy('siswas.nama', 'asc')
-            ->get();
-
         $headers = [
             'Content-Type'        => 'application/vnd.ms-excel; charset=UTF-8',
             'Content-Disposition' => "attachment; filename=\"$fileName\"",
@@ -292,15 +284,12 @@ class HomeController extends Controller
             'Expires'             => '0',
         ];
 
-        $callback = function () use ($siswas, $detailAbsensis) {
+        $callback = function () use ($siswas) {
             echo '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
             echo '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>';
             echo '<body>';
-
-            // TABEL 1: REKAP AKUMULASI + RIWAYAT TANGGAL INPUT PER SANTRI
-            echo '<h3>REKAPITULASI KEHADIRAN SANTRI</h3>';
             echo '<table border="1">';
-            echo '<tr style="background-color: #d9ead3; font-weight: bold; text-align: center;">';
+            echo '<tr style="background-color: #f2f2f2; font-weight: bold; text-align: center;">';
             echo '<th>No</th>';
             echo '<th>Nama Siswa</th>';
             echo '<th>Kelas</th>';
@@ -311,34 +300,19 @@ class HomeController extends Controller
             echo '<th>Total Pertemuan</th>';
             echo '<th>% Kehadiran</th>';
             echo '<th>Keterangan</th>';
-            echo '<th>Riwayat Tanggal Input</th>';
             echo '</tr>';
 
             foreach ($siswas as $index => $siswa) {
-                $riwayat = DB::table('absensis')
-                    ->where('siswa_id', $siswa->id)
-                    ->orderBy('tanggal', 'asc')
-                    ->get();
-
-                $hadir = $riwayat->where('status', 'Hadir')->count();
-                $izin  = $riwayat->where('status', 'Izin')->count();
-                $sakit = $riwayat->where('status', 'Sakit')->count();
-                $alpa  = $riwayat->where('status', 'Alpa')->count();
+                $hadir = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Hadir')->count();
+                $izin  = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Izin')->count();
+                $sakit = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Sakit')->count();
+                $alpa  = DB::table('absensis')->where('siswa_id', $siswa->id)->where('status', 'Alpa')->count();
 
                 $total  = $hadir + $izin + $sakit + $alpa;
                 $persen = $total > 0 ? round(($hadir / $total) * 100) : 0;
 
                 $keterangan = $persen < 75 ? 'Di Bawah Minimum (<75%)' : 'Memenuhi';
                 $bgColor    = $persen < 75 ? '#fce4d6' : '#ffffff';
-
-                $daftarTanggal = $riwayat->map(function ($item) {
-                    $tglFormat = date('d/m/Y', strtotime($item->tanggal));
-                    return "{$tglFormat} ({$item->status})";
-                })->implode(', ');
-
-                if (empty($daftarTanggal)) {
-                    $daftarTanggal = '-';
-                }
 
                 echo "<tr style='background-color: {$bgColor};'>";
                 echo "<td align='center'>" . ($index + 1) . '</td>';
@@ -351,33 +325,6 @@ class HomeController extends Controller
                 echo "<td align='center'>{$total}</td>";
                 echo "<td align='right'>{$persen}%</td>";
                 echo "<td><b>{$keterangan}</b></td>";
-                echo '<td>' . htmlspecialchars($daftarTanggal) . '</td>';
-                echo '</tr>';
-            }
-
-            echo '</table>';
-            echo '<br><br>';
-
-            // TABEL 2: RINCIAN HARIAN SESUAI TANGGAL INPUT
-            echo '<h3>RINCIAN LOG ABSENSI PER TANGGAL</h3>';
-            echo '<table border="1">';
-            echo '<tr style="background-color: #cfe2f3; font-weight: bold; text-align: center;">';
-            echo '<th>No</th>';
-            echo '<th>Tanggal</th>';
-            echo '<th>Nama Siswa</th>';
-            echo '<th>Kelas</th>';
-            echo '<th>Status Kehadiran</th>';
-            echo '</tr>';
-
-            foreach ($detailAbsensis as $idx => $row) {
-                $tglFormatted = $row->tanggal ? date('d/m/Y', strtotime($row->tanggal)) : '-';
-
-                echo '<tr>';
-                echo '<td align="center">' . ($idx + 1) . '</td>';
-                echo '<td align="center">' . htmlspecialchars($tglFormatted) . '</td>';
-                echo '<td>' . htmlspecialchars($row->nama ?? '-') . '</td>';
-                echo '<td>' . htmlspecialchars($row->kelas ?? '-') . '</td>';
-                echo '<td align="center">' . htmlspecialchars($row->status ?? '-') . '</td>';
                 echo '</tr>';
             }
 
